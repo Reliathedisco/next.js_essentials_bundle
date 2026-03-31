@@ -1,0 +1,221 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: nextjs-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: nextjs_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app_network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: nextjs-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --requirepass redis_password --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app_network
+
+  # MySQL (alternative to PostgreSQL)
+  # mysql:
+  #   image: mysql:8
+  #   container_name: nextjs-mysql
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3306:3306"
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: root_password
+  #     MYSQL_DATABASE: nextjs_db
+  #     MYSQL_USER: nextjs_user
+  #     MYSQL_PASSWORD: nextjs_password
+  #   volumes:
+  #     - mysql_data:/var/lib/mysql
+  #   networks:
+  #     - app_network
+
+  # MongoDB (NoSQL alternative)
+  # mongodb:
+  #   image: mongo:7
+  #   container_name: nextjs-mongodb
+  #   restart: unless-stopped
+  #   ports:
+  #     - "27017:27017"
+  #   environment:
+  #     MONGO_INITDB_ROOT_USERNAME: admin
+  #     MONGO_INITDB_ROOT_PASSWORD: admin_password
+  #     MONGO_INITDB_DATABASE: nextjs_db
+  #   volumes:
+  #     - mongodb_data:/data/db
+  #   networks:
+  #     - app_network
+
+  # Mailhog (Email testing)
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: nextjs-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP port
+      - "8025:8025"  # Web UI
+    networks:
+      - app_network
+
+  # Meilisearch (Search engine)
+  meilisearch:
+    image: getmeili/meilisearch:v1.5
+    container_name: nextjs-meilisearch
+    restart: unless-stopped
+    ports:
+      - "7700:7700"
+    environment:
+      MEILI_MASTER_KEY: your_master_key_change_this
+      MEILI_ENV: development
+    volumes:
+      - meilisearch_data:/meili_data
+    networks:
+      - app_network
+
+  # MinIO (S3-compatible object storage)
+  minio:
+    image: minio/minio:latest
+    container_name: nextjs-minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"  # API
+      - "9001:9001"  # Console
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - app_network
+
+  # Adminer (Database management UI)
+  adminer:
+    image: adminer:latest
+    container_name: nextjs-adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      - postgres
+    networks:
+      - app_network
+
+  # Redis Commander (Redis UI)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: nextjs-redis-commander
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379:0:redis_password
+    depends_on:
+      - redis
+    networks:
+      - app_network
+
+  # Nginx (Optional: Reverse proxy)
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: nextjs-nginx
+  #   restart: unless-stopped
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+  #     - ./docker/nginx/ssl:/etc/nginx/ssl:ro
+  #   depends_on:
+  #     - app
+  #   networks:
+  #     - app_network
+
+  # Prometheus (Monitoring - optional)
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   container_name: nextjs-prometheus
+  #   restart: unless-stopped
+  #   ports:
+  #     - "9090:9090"
+  #   volumes:
+  #     - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  #     - prometheus_data:/prometheus
+  #   command:
+  #     - '--config.file=/etc/prometheus/prometheus.yml'
+  #     - '--storage.tsdb.path=/prometheus'
+  #   networks:
+  #     - app_network
+
+  # Grafana (Visualization - optional)
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   container_name: nextjs-grafana
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3001:3000"
+  #   environment:
+  #     - GF_SECURITY_ADMIN_PASSWORD=admin
+  #   volumes:
+  #     - grafana_data:/var/lib/grafana
+  #   depends_on:
+  #     - prometheus
+  #   networks:
+  #     - app_network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  # mysql_data:
+  #   driver: local
+  # mongodb_data:
+  #   driver: local
+  meilisearch_data:
+    driver: local
+  minio_data:
+    driver: local
+  # prometheus_data:
+  #   driver: local
+  # grafana_data:
+  #   driver: local
+
+networks:
+  app_network:
+    driver: bridge
